@@ -71,6 +71,30 @@
 
                 <!-- 分類操作按鈕 -->
                 <div class="row q-gutter-xs category-actions">
+                  <!-- 內容全部展開/收合按鈕 -->
+                  <q-btn
+                    v-if="category.context.length > 0"
+                    flat
+                    dense
+                    round
+                    :icon="
+                      getCategoryContentExpandState(category.category_id).allExpanded
+                        ? 'unfold_less'
+                        : 'unfold_more'
+                    "
+                    size="sm"
+                    color="info"
+                    @click="toggleCategoryContents(category.category_id)"
+                  >
+                    <q-tooltip>
+                      {{
+                        getCategoryContentExpandState(category.category_id).allExpanded
+                          ? '收合該分類所有內容'
+                          : '展開該分類所有內容'
+                      }}
+                    </q-tooltip>
+                  </q-btn>
+
                   <q-btn
                     flat
                     dense
@@ -100,13 +124,41 @@
                       v-for="content in category.context"
                       :key="content.id"
                       class="content-item q-pa-sm q-mb-xs"
+                      :style="{
+                        background: `linear-gradient(135deg, ${category.category_color}15, ${category.category_color}08)`,
+                        '--category-color': category.category_color,
+                        '--category-color-light': `${category.category_color}20`,
+                        '--category-color-hover': `${category.category_color}10`,
+                        '--category-color-border': `${category.category_color}40`,
+                      }"
                     >
+                      <!-- 內容標題行 - 點擊可展開/收合 -->
                       <div class="row items-center q-gutter-sm">
-                        <div class="col cursor-pointer" @click="copyToClipboard(content.content)">
-                          <div class="text-subtitle2">{{ content.label }}</div>
-                          <div class="text-caption text-grey-7" v-html="content.content"></div>
+                        <div
+                          class="col cursor-pointer content-toggle"
+                          @click="toggleContent(content.id)"
+                        >
+                          <div class="row items-center q-gutter-sm">
+                            <div class="text-subtitle2 flex-1">{{ content.label }}</div>
+                            <q-icon
+                              :name="expandedContents[content.id] ? 'expand_less' : 'expand_more'"
+                              size="sm"
+                              class="transition-transform content-expand-icon"
+                            />
+                          </div>
                         </div>
                         <div class="row q-gutter-xs content-actions">
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            icon="content_copy"
+                            size="sm"
+                            color="info"
+                            @click="copyToClipboard(content.content)"
+                          >
+                            <q-tooltip>複製內容</q-tooltip>
+                          </q-btn>
                           <q-btn
                             flat
                             dense
@@ -127,6 +179,17 @@
                           />
                         </div>
                       </div>
+
+                      <!-- 展開的內容詳情 -->
+                      <q-slide-transition>
+                        <div v-if="expandedContents[content.id]" class="q-mt-sm">
+                          <div
+                            class="text-caption text-grey-7 content-detail cursor-pointer"
+                            v-html="content.content"
+                            @click="copyToClipboard(content.content)"
+                          ></div>
+                        </div>
+                      </q-slide-transition>
                     </div>
                   </div>
                   <div v-else class="text-center text-grey-6 q-py-md">此分類目前沒有內容</div>
@@ -243,6 +306,9 @@ const categoryStore = useCategoryStore();
 // 管理每個分類的展開狀態
 const expandedCategories = ref<Record<string, boolean>>({});
 
+// 管理每個內容項目的展開狀態
+const expandedContents = ref<Record<string, boolean>>({});
+
 // 初始化展開狀態 - 所有分類預設展開
 const initializeExpandedStates = () => {
   const newExpanded: Record<string, boolean> = {};
@@ -286,12 +352,26 @@ watch(
       }
     });
 
-    // 如果分類被刪除，清理其展開狀態
+    // 如果分類被刪除，清理其展開狀態和相關內容的展開狀態
     if (oldCategories) {
       const newIds = new Set(newCategories.map((cat) => cat.category_id));
       Object.keys(expandedCategories.value).forEach((id) => {
         if (!newIds.has(id)) {
           delete expandedCategories.value[id];
+        }
+      });
+
+      // 清理已刪除內容的展開狀態
+      const allCurrentContentIds = new Set();
+      newCategories.forEach((category) => {
+        category.context.forEach((content) => {
+          allCurrentContentIds.add(content.id);
+        });
+      });
+
+      Object.keys(expandedContents.value).forEach((contentId) => {
+        if (!allCurrentContentIds.has(contentId)) {
+          delete expandedContents.value[contentId];
         }
       });
     }
@@ -304,6 +384,37 @@ const allExpanded = computed(() => {
   if (categoryStore.data.length === 0) return false;
   return categoryStore.data.every((category) => expandedCategories.value[category.category_id]);
 });
+
+// 獲取特定分類下所有內容的展開狀態
+const getCategoryContentExpandState = (categoryId: string) => {
+  const category = categoryStore.data.find((cat) => cat.category_id === categoryId);
+  if (!category || category.context.length === 0) return { allExpanded: false, hasContent: false };
+
+  const allExpanded = category.context.every((content) => expandedContents.value[content.id]);
+  return { allExpanded, hasContent: true };
+};
+
+// 切換特定分類下所有內容的展開狀態
+const toggleCategoryContents = (categoryId: string) => {
+  const category = categoryStore.data.find((cat) => cat.category_id === categoryId);
+  if (!category) return;
+
+  const { allExpanded } = getCategoryContentExpandState(categoryId);
+  const shouldExpand = !allExpanded;
+
+  category.context.forEach((content) => {
+    expandedContents.value[content.id] = shouldExpand;
+  });
+
+  // 提供用戶反饋
+  Notify.create({
+    message: shouldExpand ? '已展開該分類所有內容' : '已收合該分類所有內容',
+    color: 'info',
+    position: 'top',
+    timeout: 1000,
+    icon: shouldExpand ? 'unfold_more' : 'unfold_less',
+  });
+};
 
 // 編輯內容相關狀態
 const editingContent = ref<{
@@ -333,6 +444,11 @@ const toggleCategory = (categoryId: string) => {
   expandedCategories.value[categoryId] = !expandedCategories.value[categoryId];
 };
 
+// 切換內容項目展開狀態
+const toggleContent = (contentId: string) => {
+  expandedContents.value[contentId] = !expandedContents.value[contentId];
+};
+
 // 智能切換全部分類的展開狀態
 const toggleAllCategories = () => {
   // 如果所有分類都展開，則全部收合
@@ -345,6 +461,29 @@ const toggleAllCategories = () => {
   });
 
   expandedCategories.value = newExpanded;
+
+  // 同時切換所有內容項目的展開狀態
+  toggleAllContents(shouldExpand);
+
+  // 提供用戶反饋
+  Notify.create({
+    message: shouldExpand ? '已展開所有分類和內容' : '已收合所有分類和內容',
+    color: 'info',
+    position: 'top',
+    timeout: 1500,
+    icon: shouldExpand ? 'unfold_more' : 'unfold_less',
+  });
+};
+
+// 切換所有內容項目的展開狀態
+const toggleAllContents = (shouldExpand: boolean) => {
+  const newExpandedContents: Record<string, boolean> = {};
+  categoryStore.data.forEach((category) => {
+    category.context.forEach((content) => {
+      newExpandedContents[content.id] = shouldExpand;
+    });
+  });
+  expandedContents.value = newExpandedContents;
 };
 
 // 打開編輯對話框
@@ -549,6 +688,15 @@ const deleteCategory = (categoryId: string, categoryName: string) => {
 // 確認刪除分類
 const confirmDeleteCategory = () => {
   if (deleteCategoryId.value) {
+    // 在刪除前獲取分類信息，清理相關的展開狀態
+    const category = categoryStore.data.find((cat) => cat.category_id === deleteCategoryId.value);
+    if (category) {
+      // 清理該分類下所有內容的展開狀態
+      category.context.forEach((content) => {
+        delete expandedContents.value[content.id];
+      });
+    }
+
     const success = categoryStore.removeCategoryById(deleteCategoryId.value);
 
     if (success) {
@@ -695,11 +843,6 @@ const copyToClipboard = async (content: string) => {
 
   &:hover {
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-    transform: translateY(-2px);
-  }
-
-  &:active {
-    transform: translateY(0px);
   }
 
   // 確保卡片內容填滿高度
@@ -725,10 +868,6 @@ const copyToClipboard = async (content: string) => {
     background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(8px);
   }
-
-  &:active {
-    transform: scale(0.98);
-  }
 }
 
 .category-color-indicator {
@@ -736,7 +875,6 @@ const copyToClipboard = async (content: string) => {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 
   .category-toggle:hover & {
-    transform: scale(1.1);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   }
 }
@@ -770,50 +908,54 @@ const copyToClipboard = async (content: string) => {
 .content-item {
   transition: all 0.2s ease;
   border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.6) !important;
   backdrop-filter: blur(8px);
   border-radius: 8px;
   position: relative;
   overflow: hidden;
 
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255, 255, 255, 0.2);
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    z-index: -1;
-  }
-
   &:hover {
-    &::before {
-      opacity: 1;
-    }
-
-    background: rgba(255, 255, 255, 0.8) !important;
-    border-color: rgba(33, 150, 243, 0.5);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(33, 150, 243, 0.2);
+    background: var(--category-color-hover, rgba(255, 255, 255, 0.8)) !important;
+    border-color: var(--category-color-border, rgba(33, 150, 243, 0.5));
+    box-shadow: 0 4px 16px var(--category-color-light, rgba(33, 150, 243, 0.2));
     backdrop-filter: blur(12px);
 
     .content-actions {
       opacity: 1;
     }
   }
+}
 
-  &:active {
-    transform: translateY(0px);
-    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
+.content-toggle {
+  transition: all 0.2s ease;
+  padding: 4px;
+  border-radius: 4px;
+
+  &:hover {
+    background: var(--category-color-hover, rgba(33, 150, 243, 0.1));
   }
+}
 
-  .text-caption {
-    /* 移除行數限制，允許完整顯示內容 */
-    word-break: break-word;
-    white-space: normal;
+.content-expand-icon {
+  transition: transform 0.3s ease;
+  opacity: 0.6;
+
+  .content-toggle:hover & {
+    opacity: 1;
+  }
+}
+
+.content-detail {
+  padding: 8px 12px;
+  background: #e9e9e9;
+  border-radius: 6px;
+  border-left: 3px solid var(--category-color-border, rgba(33, 150, 243, 0.3));
+  word-break: break-word;
+  white-space: normal;
+  line-height: 1.4;
+
+  &:hover {
+    background: var(--category-color-light, rgba(33, 150, 243, 0.05));
+    border-left-color: var(--category-color, rgba(33, 150, 243, 0.5));
   }
 }
 
@@ -848,13 +990,7 @@ const copyToClipboard = async (content: string) => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 
   &:hover {
-    transform: translateY(-2px);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  }
-
-  &:active {
-    transform: translateY(0px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
   .q-icon {
