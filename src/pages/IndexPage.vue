@@ -37,15 +37,12 @@
       </div>
       <!-- 顯示現有分類 -->
       <div v-if="categoryStore.data.length > 0" class="q-mb-md">
-        <div class="row q-gutter-md">
+        <div class="categories-grid">
           <q-card
             v-for="category in categoryStore.data"
             :key="category.category_id"
-            class="col q-pa-md category-card"
+            class="category-card"
             :style="{
-              flex: 1,
-              minWidth: '300px',
-              maxWidth: 'calc(33.333% - 16px)',
               background: `linear-gradient(135deg, ${category.category_color}20, ${category.category_color}10)`,
             }"
           >
@@ -640,28 +637,49 @@ const copyToClipboard = async (content: string) => {
   }
 }
 
+/* Grid 布局容器 */
+.categories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.5rem;
+  max-width: 100%;
+
+  // 大螢幕：確保最多三列，等寬分布
+  @media (min-width: 1200px) {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+
+  // 中等螢幕：最多兩列
+  @media (max-width: 1199px) and (min-width: 768px) {
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 1.25rem;
+  }
+
+  // 小螢幕：單列
+  @media (max-width: 767px) {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
 .q-card {
   backdrop-filter: blur(15px);
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   border-radius: 12px;
   overflow: hidden;
-
-  // 響應式布局
-  @media (max-width: 1200px) {
-    max-width: calc(50% - 12px) !important;
-  }
-
-  @media (max-width: 768px) {
-    max-width: 100% !important;
-  }
 }
 
 .category-card {
   transition: all 0.3s ease;
   position: relative;
   height: fit-content;
-  align-self: flex-start;
+  padding: 1rem;
+
+  // Grid 項目對齊
+  display: flex;
+  flex-direction: column;
 
   &::before {
     content: '';
@@ -677,6 +695,18 @@ const copyToClipboard = async (content: string) => {
 
   &:hover {
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    transform: translateY(0px);
+  }
+
+  // 確保卡片內容填滿高度
+  .q-card-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
   }
 }
 
