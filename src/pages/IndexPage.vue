@@ -277,6 +277,24 @@ import EditContentDialog from 'components/EditContentDialog.vue';
 import EditCategoryDialog from 'components/EditCategoryDialog.vue';
 import { useCategoryStore, type ContentItem as StoreContentItem } from 'stores/category-store';
 
+// HTML轉純文字函數
+function htmlToTxt(html: string): string {
+  return (
+    html
+      // 先處理 Quasar 編輯器的格式：<div> 開始標籤前加換行（除了第一個）
+      .replace(/(<div[^>]*>)/gi, '\n$1')
+      // <div> 結束標籤換成換行
+      .replace(/<\/div>/gi, '\n')
+      // <br> 換成換行
+      .replace(/<br\s*\/?>/gi, '\n')
+      // 移除其他標籤
+      .replace(/<[^>]+>/g, '')
+      // 把多餘空白處理乾淨
+      .replace(/\n\s*\n/g, '\n')
+      .trim()
+  );
+}
+
 interface Category {
   name: string;
   color: string;
@@ -736,10 +754,8 @@ const cancelDeleteCategory = () => {
 // 複製內容到剪貼簿
 const copyToClipboard = async (content: string) => {
   try {
-    // 移除 HTML 標籤，只保留純文字
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = content;
-    const textContent = tempDiv.textContent || tempDiv.innerText || '';
+    // 使用自定義的HTML轉純文字函數，保持換行格式
+    const textContent = htmlToTxt(content);
 
     await navigator.clipboard.writeText(textContent);
 
