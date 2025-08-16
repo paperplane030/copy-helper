@@ -17,8 +17,10 @@
   },
   "dependencies": {
     "@quasar/extras": "^1.16.4",
+    "@types/sortablejs": "^1.15.8",
     "pinia": "^3.0.1",
     "quasar": "^2.16.0",
+    "sortablejs": "^1.15.6",
     "vue": "^3.4.18",
     "vue-router": "^4.0.12"
   },

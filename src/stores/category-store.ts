@@ -265,6 +265,31 @@ export const useCategoryStore = defineStore('category', () => {
     return false;
   };
 
+  // 重新排序分類中的內容
+  const reorderContentInCategory = (
+    categoryId: string,
+    oldIndex: number,
+    newIndex: number,
+  ): boolean => {
+    const category = findCategoryById(categoryId);
+    if (
+      category &&
+      oldIndex >= 0 &&
+      newIndex >= 0 &&
+      oldIndex < category.context.length &&
+      newIndex < category.context.length
+    ) {
+      // 移動元素
+      const movedItem = category.context.splice(oldIndex, 1)[0];
+      if (movedItem) {
+        category.context.splice(newIndex, 0, movedItem);
+        saveDataToCookie(); // 儲存到 cookie
+        return true;
+      }
+    }
+    return false;
+  };
+
   // 舊方法保留以便向後兼容，但標記為棄用
   const addContextToCategory = (categoryId: string, contextItem: string): boolean => {
     return addContentToCategory(categoryId, 'Legacy Item', contextItem);
@@ -335,6 +360,7 @@ export const useCategoryStore = defineStore('category', () => {
     removeCategoryById,
     addContentToCategory,
     removeContentFromCategory,
+    reorderContentInCategory,
     addContextToCategory,
     removeContextFromCategory,
     getAllCategories,

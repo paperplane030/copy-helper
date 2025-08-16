@@ -121,75 +121,86 @@
                 <div v-if="expandedCategories[category.category_id]" class="q-mt-sm">
                   <div v-if="category.context.length > 0" class="content-list">
                     <div
-                      v-for="content in category.context"
-                      :key="content.id"
-                      class="content-item q-pa-sm q-mb-xs"
-                      :style="{
-                        background: `linear-gradient(135deg, ${category.category_color}15, ${category.category_color}08)`,
-                        '--category-color': category.category_color,
-                        '--category-color-light': `${category.category_color}20`,
-                        '--category-color-hover': `${category.category_color}10`,
-                        '--category-color-border': `${category.category_color}40`,
-                      }"
+                      class="sortable-content-list"
+                      :data-sortable-category="category.category_id"
                     >
-                      <!-- 內容標題行 - 點擊可展開/收合 -->
-                      <div class="row items-center q-gutter-sm">
-                        <div
-                          class="col cursor-pointer content-toggle"
-                          @click="toggleContent(content.id)"
-                        >
-                          <div class="row items-center q-gutter-sm">
-                            <div class="text-subtitle2 flex-1">{{ content.label }}</div>
-                            <q-icon
-                              :name="expandedContents[content.id] ? 'expand_less' : 'expand_more'"
+                      <div
+                        v-for="content in category.context"
+                        :key="content.id"
+                        class="content-item q-pa-sm q-mb-xs"
+                        :data-content-id="content.id"
+                        :style="{
+                          background: `linear-gradient(135deg, ${category.category_color}15, ${category.category_color}08)`,
+                          '--category-color': category.category_color,
+                          '--category-color-light': `${category.category_color}20`,
+                          '--category-color-hover': `${category.category_color}25`,
+                          '--category-color-border': `${category.category_color}40`,
+                        }"
+                      >
+                        <!-- 內容標題行 - 點擊可展開/收合 -->
+                        <div class="row items-center q-gutter-sm">
+                          <!-- 拖曳手柄 -->
+                          <div class="drag-handle cursor-move q-px-xs">
+                            <q-icon name="drag_indicator" size="sm" color="grey-6" />
+                          </div>
+
+                          <div
+                            class="col cursor-pointer content-toggle"
+                            @click="toggleContent(content.id)"
+                          >
+                            <div class="row items-center q-gutter-sm">
+                              <div class="text-subtitle2 flex-1">{{ content.label }}</div>
+                              <q-icon
+                                :name="expandedContents[content.id] ? 'expand_less' : 'expand_more'"
+                                size="sm"
+                                class="transition-transform content-expand-icon"
+                              />
+                            </div>
+                          </div>
+                          <div class="row q-gutter-xs content-actions">
+                            <q-btn
+                              flat
+                              dense
+                              round
+                              icon="content_copy"
                               size="sm"
-                              class="transition-transform content-expand-icon"
+                              color="info"
+                              @click="copyToClipboard(content.content)"
+                            >
+                              <q-tooltip>複製內容</q-tooltip>
+                            </q-btn>
+                            <q-btn
+                              flat
+                              dense
+                              round
+                              icon="edit"
+                              size="sm"
+                              color="primary"
+                              @click="openEditDialog(content, category.category_id)"
+                            />
+                            <q-btn
+                              flat
+                              dense
+                              round
+                              icon="delete"
+                              size="sm"
+                              color="negative"
+                              @click="deleteContent(category.category_id, content.id)"
                             />
                           </div>
                         </div>
-                        <div class="row q-gutter-xs content-actions">
-                          <q-btn
-                            flat
-                            dense
-                            round
-                            icon="content_copy"
-                            size="sm"
-                            color="info"
-                            @click="copyToClipboard(content.content)"
-                          >
-                            <q-tooltip>複製內容</q-tooltip>
-                          </q-btn>
-                          <q-btn
-                            flat
-                            dense
-                            round
-                            icon="edit"
-                            size="sm"
-                            color="primary"
-                            @click="openEditDialog(content, category.category_id)"
-                          />
-                          <q-btn
-                            flat
-                            dense
-                            round
-                            icon="delete"
-                            size="sm"
-                            color="negative"
-                            @click="deleteContent(category.category_id, content.id)"
-                          />
-                        </div>
-                      </div>
 
-                      <!-- 展開的內容詳情 -->
-                      <q-slide-transition>
-                        <div v-if="expandedContents[content.id]" class="q-mt-sm">
-                          <div
-                            class="text-caption text-grey-7 content-detail cursor-pointer"
-                            v-html="content.content"
-                            @click="copyToClipboard(content.content)"
-                          ></div>
-                        </div>
-                      </q-slide-transition>
+                        <!-- 展開的內容詳情 -->
+                        <q-slide-transition>
+                          <div v-if="expandedContents[content.id]" class="q-mt-sm">
+                            <div
+                              class="text-caption text-grey-7 content-detail cursor-pointer"
+                              v-html="content.content"
+                              @click="copyToClipboard(content.content)"
+                            ></div>
+                          </div>
+                        </q-slide-transition>
+                      </div>
                     </div>
                   </div>
                   <div v-else class="text-center text-grey-6 q-py-md">此分類目前沒有內容</div>
@@ -269,8 +280,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { Notify } from 'quasar';
+import Sortable from 'sortablejs';
 import AddCategoryDialog from 'components/AddCategoryDialog.vue';
 import AddContentDialog from 'components/AddContentDialog.vue';
 import EditContentDialog from 'components/EditContentDialog.vue';
@@ -327,6 +339,67 @@ const expandedCategories = ref<Record<string, boolean>>({});
 // 管理每個內容項目的展開狀態
 const expandedContents = ref<Record<string, boolean>>({});
 
+// 拖曳排序相關狀態
+const sortableInstances = ref<Record<string, Sortable>>({});
+
+// 初始化拖曳排序
+const initializeSortable = () => {
+  // 等待下一個 tick 確保 DOM 已更新
+  void nextTick(() => {
+    categoryStore.data.forEach((category) => {
+      const containerElement = document.querySelector(
+        `[data-sortable-category="${category.category_id}"]`,
+      ) as HTMLElement;
+
+      if (containerElement && category.context.length > 1) {
+        // 清理現有的實例
+        const existingInstance = sortableInstances.value[category.category_id];
+        if (existingInstance) {
+          existingInstance.destroy();
+        }
+
+        // 創建新的拖曳實例
+        sortableInstances.value[category.category_id] = Sortable.create(containerElement, {
+          animation: 150,
+          ghostClass: 'sortable-ghost',
+          chosenClass: 'sortable-chosen',
+          dragClass: 'sortable-drag',
+          handle: '.drag-handle',
+          onEnd: (evt) => {
+            const categoryId = containerElement.dataset.sortableCategory;
+            if (categoryId && evt.oldIndex !== undefined && evt.newIndex !== undefined) {
+              handleContentReorder(categoryId, evt.oldIndex, evt.newIndex);
+            }
+          },
+        });
+      }
+    });
+  });
+};
+
+// 處理內容重新排序
+const handleContentReorder = (categoryId: string, oldIndex: number, newIndex: number) => {
+  const success = categoryStore.reorderContentInCategory(categoryId, oldIndex, newIndex);
+
+  if (success) {
+    Notify.create({
+      message: '內容順序已更新',
+      color: 'positive',
+      position: 'top',
+      timeout: 1500,
+      icon: 'swap_vert',
+    });
+  } else {
+    Notify.create({
+      message: '排序失敗',
+      color: 'negative',
+      position: 'top',
+      timeout: 2000,
+      icon: 'error',
+    });
+  }
+};
+
 // 初始化展開狀態 - 所有分類預設展開
 const initializeExpandedStates = () => {
   const newExpanded: Record<string, boolean> = {};
@@ -339,6 +412,7 @@ const initializeExpandedStates = () => {
 // 頁面載入時初始化
 onMounted(() => {
   initializeExpandedStates();
+  initializeSortable();
 
   // 添加鍵盤快捷鍵支持
   const handleKeyPress = (event: KeyboardEvent) => {
@@ -355,6 +429,11 @@ onMounted(() => {
 
   // 在組件卸載時清理事件監聽器
   onBeforeUnmount(() => {
+    // 清理拖曳實例
+    Object.values(sortableInstances.value).forEach((instance) => {
+      instance?.destroy();
+    });
+
     document.removeEventListener('keydown', handleKeyPress);
   });
 });
@@ -393,6 +472,9 @@ watch(
         }
       });
     }
+
+    // 重新初始化拖曳排序
+    initializeSortable();
   },
   { deep: true },
 );
@@ -1028,5 +1110,37 @@ const copyToClipboard = async (content: string) => {
   .q-icon {
     opacity: 0.7;
   }
+}
+
+/* 拖曳排序樣式 */
+.drag-handle {
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.content-item:hover .drag-handle {
+  opacity: 0.8;
+}
+
+.sortable-ghost {
+  opacity: 0.4;
+  background: var(--category-color-light, rgba(33, 150, 243, 0.2)) !important;
+}
+
+.sortable-chosen {
+  cursor: grabbing !important;
+}
+
+.sortable-drag {
+  transform: rotate(5deg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+}
+
+.sortable-content-list {
+  min-height: 20px; /* 確保拖曳區域有最小高度 */
 }
 </style>
